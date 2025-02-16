@@ -5,20 +5,8 @@
 #ifndef _TFT_ESPI_SHIM_H_
 #define _TFT_ESPI_SHIM_H_
 
-#ifndef TFT_WIDTH
-#error TFT_WIDTH Must be defined!
-#endif
-
-#ifndef TFT_HEIGHT
-#error TFT_HEIGHT Must be defined!
-#endif
-
-#ifndef TFT_DC
-#error TFT_DC Must be defined!
-#endif
-
-#ifndef TFT_CS
-#error TFT_CS Must be defined!
+#ifndef WEAK
+#define WEAK __attribute__( ( weak ) )
 #endif
 
 #ifndef PROGMEM
@@ -58,17 +46,15 @@
   #define TAB_COLOUR 0
 #endif
 
-typedef struct {
-    void ( *setPinOutput ) ( int pin );
-    void ( *setPinInput ) ( int pin );
-    uint8_t ( *pinRead ) ( int pin );
-    void ( *pinWrite ) ( int pin, int level );
-    uint8_t ( *busWrite8 ) ( uint8_t data );
-    uint16_t ( *busWrite16 ) ( uint16_t data );
-    void ( *msecDelay ) ( int32_t msec );
-} ShimHWAPI;
+WEAK void _tftPinSetOutput( int pin );
+WEAK void _tftPinSetInput( int pin );
+WEAK int _tftPinRead( int pin );
+WEAK void _tftPinWrite( int pin, int level );
+WEAK void _tftBusWrite8( uint8_t data );
+WEAK void _tftBusWrite16( uint16_t data );
+WEAK void _tftDelayMSec( uint32_t msec );
 
-void tftShimInit( ShimHWAPI* api );
+void tftShimInit( void );
 void tftRotate( uint8_t m );
 void tftSetAddressWindow( uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1 );
 void tftBeginPixels( void );

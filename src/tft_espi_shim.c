@@ -8,8 +8,8 @@
 #include <stdint.h>
 #include "tft_espi_shim.h"
 
-#define DC_C ( *hw.pinWrite ) ( TFT_DC, 0 )
-#define DC_D ( *hw.pinWrite ) ( TFT_DC, 1 )
+#define DC_C _tftPinWrite( TFT_DC, 0 )
+#define DC_D _tftPinWrite( TFT_DC, 1 )
 
 #if defined GC9A01_DRIVER
 #include "../TFT_eSPI/TFT_Drivers/GC9A01_Defines.h"
@@ -51,16 +51,6 @@ static int rowstart = 0;
 
 static int tabcolor = 0;
 
-static ShimHWAPI hw = {
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL
-};
-
 static void commandList( const uint8_t* l ) {
     uint8_t delayTime = 0;
     uint8_t cmdCount = 0;
@@ -83,27 +73,27 @@ static void commandList( const uint8_t* l ) {
 
         if ( delayTime ) {
             delayTime = pgm_read_byte( l++ );
-            ( *hw.msecDelay ) ( ( delayTime == 255 ) ? 500 : delayTime );
+            _tftDelayMSec( ( delayTime == 255 ) ? 500 : delayTime );
         }
     }
 }
 
 static void delay( int ms ) {
-    ( *hw.msecDelay ) ( ms );
+    _tftDelayMSec( ms );
 }
 
 static void begin_tft_write( void ) {
-    ( *hw.pinWrite )( TFT_CS, 0 );
+    _tftPinWrite( TFT_CS, 0 );
 }
 
 static void end_tft_write( void ) {
-    ( *hw.pinWrite )( TFT_CS, 1 );
+    _tftPinWrite( TFT_CS, 1 );
 }
 
 static void writecommand( uint8_t cmd ) {
     begin_tft_write( );
         DC_C;
-            ( *hw.busWrite8 )( cmd );
+            _tftBusWrite8( cmd );
         DC_D;
     end_tft_write( );
 }
@@ -111,8 +101,8 @@ static void writecommand( uint8_t cmd ) {
 static void writedata( uint8_t data ) {
     begin_tft_write( );
         DC_D;
-        ( *hw.busWrite8 ) ( data );
-        ( *hw.pinWrite ) ( TFT_CS, 0 );
+        _tftBusWrite8( data );
+        _tftPinWrite( TFT_CS, 0 );
     end_tft_write( );
 }
 
@@ -120,36 +110,34 @@ static void fillScreen( uint16_t color ) {
     tftSetAddressWindow( 0, 0, TFT_WIDTH - 1, TFT_HEIGHT - 1 );
 
     for ( int i = 0; i < TFT_WIDTH * TFT_HEIGHT; i++ ) {
-        ( *hw.busWrite16 ) ( color );
+        _tftBusWrite16( color );
     }
 }
 
-void tftShimInit( ShimHWAPI* api ) {
-    hw = *api;
-
+void tftShimInit( void ) {
     if ( TFT_CS > -1 ) {
-        ( *hw.pinWrite ) ( TFT_CS, 1 );        
-        ( *hw.setPinOutput ) ( TFT_CS );
+        _tftPinWrite( TFT_CS, 1 );        
+        _tftPinSetOutput( TFT_CS );
     }
 
     if ( TFT_DC > -1 ) {
-        ( *hw.pinWrite ) ( TFT_DC, 0 );        
-        ( *hw.setPinOutput ) ( TFT_DC );
+        _tftPinWrite( TFT_DC, 0 );        
+        _tftPinSetOutput( TFT_DC );
     }
 
 #if defined TFT_RST
     if ( TFT_RST > -1 ) {
         writecommand( 0x00 );
 
-        ( *hw.pinWrite ) ( TFT_RST, 1 );
-        ( *hw.setPinOutput )( TFT_RST );
+        _tftPinWrite( TFT_RST, 1 );
+        _tftPinSetOutput( TFT_RST );
 
-        ( *hw.msecDelay ) ( 5 );
+        _tftDelayMSec( 5 );
 
-        ( *hw.pinWrite ) ( TFT_RST, 0 );
-        ( *hw.msecDelay ) ( 20 );
+        _tftPinWrite( TFT_RST, 0 );
+        _tftDelayMSec( 20 );
 
-        ( *hw.pinWrite ) ( TFT_RST, 1 );
+        _tftPinWrite( TFT_RST, 1 );
     } else {
 #else
     {
@@ -157,7 +145,7 @@ void tftShimInit( ShimHWAPI* api ) {
         writecommand( TFT_SWRST );
     }
 
-    ( *hw.msecDelay ) ( 150 );
+    _tftDelayMSec( 150 );
 
     begin_tft_write( );
 
@@ -220,7 +208,7 @@ void tftRotate( uint8_t m ) {
 #include "../TFT_eSPI/TFT_Drivers/ST7789_Rotation.h"
 #endif
 
-        ( *hw.msecDelay ) ( 1 );
+    _tftDelayMSec( 1 );
     end_tft_write( );
 }
 
@@ -229,42 +217,42 @@ void tftSetAddressWindow( uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1 ) {
 #if defined SSD1351_DRIVER
         // Col address
         DC_C;
-        ( *hw.busWrite8 )( TFT_CASET );
+        _tftBusWrite8( TFT_CASET );
 
         DC_D;
-        ( *hw.busWrite8 ) ( x0 );
-        ( *hw.busWrite8 ) ( x1 );
+        _tftBusWrite8( x0 );
+        _tftBusWrite8( x1 );
 
         // Row address
         DC_C;
         ( *hw.busWrite8 )( TFT_PASET );
 
         DC_D;
-        ( *hw.busWrite8 ) ( y0 );
-        ( *hw.busWrite8 ) ( y1 );
+        _tftBusWrite8( y0 );
+        _tftBusWrite8( y1 );
 
         DC_C;
-        ( *hw.busWrite8 ) ( TFT_RAMWR );
+        _tftBusWrite8( TFT_RAMWR );
         DC_D;
 #else
         // Col address
         DC_C;
-        ( *hw.busWrite8 )( TFT_CASET );
+        _tftBusWrite8( TFT_CASET );
 
         DC_D;
-        ( *hw.busWrite16 ) ( x0 + colstart );
-        ( *hw.busWrite16 ) ( x1 + colstart );
+        _tftBusWrite16( x0 + colstart );
+        _tftBusWrite16( x1 + colstart );
 
         // Row address
         DC_C;
-        ( *hw.busWrite8 )( TFT_PASET );
+        _tftBusWrite8( TFT_PASET );
 
         DC_D;
-        ( *hw.busWrite16 ) ( y0 + rowstart );
-        ( *hw.busWrite16 ) ( y1 + rowstart );
+        _tftBusWrite16( y0 + rowstart );
+        _tftBusWrite16( y1 + rowstart );
 
         DC_C;
-        ( *hw.busWrite8 ) ( TFT_RAMWR );
+        _tftBusWrite8( TFT_RAMWR );
         DC_D;
 #endif
     end_tft_write( );

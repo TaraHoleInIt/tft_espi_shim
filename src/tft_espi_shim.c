@@ -271,7 +271,15 @@ void tftEndPixels( void ) {
 }
 
 void tftFillScreen( uint16_t color ) {
+    tftSetAddressWindow( 0, 0, TFT_WIDTH - 1, TFT_HEIGHT - 1 );
+
     tftBeginPixels( );
-        fillScreen( color );
+        //fillScreen( color );
+        tftPushColor( color, TFT_WIDTH * TFT_HEIGHT );
     tftEndPixels( );
+}
+
+WEAK void tftPushColor( uint16_t color, int count ) {
+    while ( count-- )
+        _tftBusWrite16( color );
 }

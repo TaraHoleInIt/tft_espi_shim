@@ -62,4 +62,6 @@ void tftBeginPixels( void );
 void tftEndPixels( void );
 void tftFillScreen( uint16_t color );
 
+WEAK void tftPushColor( uint16_t color, int count );
+
 #endif

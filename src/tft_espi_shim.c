@@ -6,6 +6,7 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include "tft_espi_shim.h"
 
 #define DC_C _tftPinWrite( TFT_DC, 0 )
@@ -115,6 +116,8 @@ static void fillScreen( uint16_t color ) {
 }
 
 void tftShimInit( void ) {
+    _tftBusInit( 1000000 );
+
     if ( TFT_CS > -1 ) {
         _tftPinWrite( TFT_CS, 1 );        
         _tftPinSetOutput( TFT_CS );
@@ -255,7 +258,7 @@ void tftSetAddressWindow( uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1 ) {
         _tftBusWrite8( TFT_RAMWR );
         DC_D;
 #endif
-    end_tft_write( );
+    //end_tft_write( );
 }
 
 void tftBeginPixels( void ) {
@@ -265,4 +268,10 @@ void tftBeginPixels( void ) {
 
 void tftEndPixels( void ) {
     end_tft_write( );
+}
+
+void tftFillScreen( uint16_t color ) {
+    tftBeginPixels( );
+        fillScreen( color );
+    tftEndPixels( );
 }

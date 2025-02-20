@@ -46,12 +46,13 @@
   #define TAB_COLOUR 0
 #endif
 
+WEAK void _tftBusInit( uint32_t freq );
 WEAK void _tftPinSetOutput( int pin );
 WEAK void _tftPinSetInput( int pin );
 WEAK int _tftPinRead( int pin );
 WEAK void _tftPinWrite( int pin, int level );
-WEAK void _tftBusWrite8( uint8_t data );
-WEAK void _tftBusWrite16( uint16_t data );
+WEAK uint8_t _tftBusWrite8( uint8_t data );
+WEAK uint16_t _tftBusWrite16( uint16_t data );
 WEAK void _tftDelayMSec( uint32_t msec );
 
 void tftShimInit( void );
@@ -59,5 +60,6 @@ void tftRotate( uint8_t m );
 void tftSetAddressWindow( uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1 );
 void tftBeginPixels( void );
 void tftEndPixels( void );
+void tftFillScreen( uint16_t color );
 
 #endif

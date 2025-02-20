@@ -180,6 +180,7 @@ tabcolor = TAB_COLOUR;
     end_tft_write( );
 
     tftRotate( 0 );
+    tftFillScreen( TFT_BLACK );
 }
 
 void tftRotate( uint8_t m ) {
@@ -258,6 +259,9 @@ void tftSetAddressWindow( uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1 ) {
         _tftBusWrite8( TFT_RAMWR );
         DC_D;
 #endif
+    // TARA:
+    // Should we just leave it enabled like this?
+
     //end_tft_write( );
 }
 
@@ -274,7 +278,6 @@ void tftFillScreen( uint16_t color ) {
     tftSetAddressWindow( 0, 0, TFT_WIDTH - 1, TFT_HEIGHT - 1 );
 
     tftBeginPixels( );
-        //fillScreen( color );
         tftPushColor( color, TFT_WIDTH * TFT_HEIGHT );
     tftEndPixels( );
 }
@@ -282,4 +285,9 @@ void tftFillScreen( uint16_t color ) {
 WEAK void tftPushColor( uint16_t color, int count ) {
     while ( count-- )
         _tftBusWrite16( color );
+}
+
+WEAK void tftPushPixels( const uint16_t* buf, int lenWords ) {
+    while ( lenWords-- )
+        _tftBusWrite16( *buf++ );
 }

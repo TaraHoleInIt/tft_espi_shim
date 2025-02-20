@@ -3,12 +3,14 @@
 #include "ch32fun.h"
 #include "ch32v003_GPIO_branchless.h"
 #include "ch32v003_SPI.h"
+
 #include "tft_espi_shim.h"
 
 #define SPI_TX_DMA DMA1_Channel3
 #define DMA_MAX_LEN 65535
 
-void DMA1_Channel3_IRQHandler( void ) __attribute__( ( interrupt ) );
+static void DMA1_Channel3_IRQHandler( void ) __attribute__( ( interrupt ) );
+static void setupSPIDMA16( const void* src, uint16_t count, uint32_t flags );
 
 int spiSetFreq( int newFreq );
 uint8_t* spiRW( const uint8_t* src, uint8_t* dest, int len );
@@ -19,6 +21,20 @@ void spiWaitBusy( void );
 void spiWaitRX( void );
 
 static volatile uint8_t isTX = 0;
+
+// ref: https://github.com/cnlohr/ch32v003fun/blob/master/examples/dma_spi/dma_spi.c
+static void DMA1_Channel3_IRQHandler( void ) {
+    volatile int intfr = DMA1->INTFR;
+
+    do {
+        DMA1->INTFCR = 0xFFFFFFFF;
+
+        if ( intfr & DMA1_IT_TC3 )
+            isTX = 0;
+
+        intfr = DMA1->INTFR;
+    } while ( intfr );
+}
 
 void _tftPinSetOutput( int pin ) {
     GPIO_pinMode( pin, GPIO_pinMode_O_pushPull, GPIO_Speed_50MHz );
@@ -179,8 +195,6 @@ void spiWaitRX( void ) {
     ;
 }
 
-// 240x240x2 = 115200
-
 void tftPushColor( uint16_t color, int count ) {
     int len = 0;
 
@@ -194,22 +208,13 @@ void tftPushColor( uint16_t color, int count ) {
         while ( count ) {
             len = ( count > DMA_MAX_LEN ) ? DMA_MAX_LEN : count;
 
-            SPI_TX_DMA->CFGR &= ~DMA_CFGR3_EN;
-            SPI_TX_DMA->MADDR = ( uint32_t ) &color;
-            SPI_TX_DMA->PADDR = ( uint32_t ) &SPI1->DATAR;
-            SPI_TX_DMA->CNTR = len;
-            SPI_TX_DMA->CFGR = \
-                DMA_Priority_VeryHigh | \
-                DMA_Mode_Normal | \
-                DMA_M2M_Disable | \
+            setupSPIDMA16( 
+                &color, 
+                len, 
                 DMA_MemoryInc_Disable | \
-                DMA_PeripheralInc_Disable | \
-                DMA_PeripheralDataSize_HalfWord | \
                 DMA_MemoryDataSize_HalfWord | \
-                DMA_DIR_PeripheralDST | 
-                DMA_IT_TC | \
-                DMA_CFGR1_EN
-            ;
+                DMA_PeripheralDataSize_HalfWord
+            );
 
             spiWaitBusy( );
             count-= len;
@@ -221,16 +226,50 @@ void tftPushColor( uint16_t color, int count ) {
     SPI1->CTLR1 |= SPI_CTLR1_SPE;       // Re-enable SPI
 }
 
-// ref: https://github.com/cnlohr/ch32v003fun/blob/master/examples/dma_spi/dma_spi.c
-void DMA1_Channel3_IRQHandler( void ) {
-    volatile int intfr = DMA1->INTFR;
+void tftPushPixels( const uint16_t* buf, int count ) {
+    int len = 0;
 
-    do {
-        DMA1->INTFCR = 0xFFFFFFFF;
+    spiWaitBusy( );
 
-        if ( intfr & DMA1_IT_TC3 )
-            isTX = 0;
+    SPI1->CTLR1 &= ~SPI_CTLR1_SPE;      // Disable SPI
+        SPI1->CTLR1 |= SPI_CTLR1_DFF;   // Set 16-bit mode
+    SPI1->CTLR1 |= SPI_CTLR1_SPE;       // Re-enable SPI
 
-        intfr = DMA1->INTFR;
-    } while ( intfr );
+    tftBeginPixels( );
+        while ( count ) {
+            len = ( count > DMA_MAX_LEN ) ? DMA_MAX_LEN : count;
+
+            setupSPIDMA16( 
+                buf, 
+                len, 
+                DMA_MemoryInc_Enable | \
+                DMA_MemoryDataSize_HalfWord | \
+                DMA_PeripheralDataSize_HalfWord
+            );
+
+            spiWaitBusy( );
+            count-= len;
+        }
+    tftEndPixels( );
+
+    SPI1->CTLR1 &= ~SPI_CTLR1_SPE;      // Disable SPI
+        SPI1->CTLR1 &= ~SPI_CTLR1_DFF;  // Clear 16-bit mode
+    SPI1->CTLR1 |= SPI_CTLR1_SPE;       // Re-enable SPI
+}
+
+static void setupSPIDMA16( const void* src, uint16_t count, uint32_t flags ) {
+    SPI_TX_DMA->CFGR &= ~DMA_CFGR3_EN;
+    SPI_TX_DMA->MADDR = ( uint32_t ) src;
+    SPI_TX_DMA->PADDR = ( uint32_t ) &SPI1->DATAR;
+    SPI_TX_DMA->CNTR = count;
+    SPI_TX_DMA->CFGR = \
+        DMA_Priority_VeryHigh | \
+        DMA_Mode_Normal | \
+        DMA_M2M_Disable | \
+        DMA_PeripheralInc_Disable | \
+        DMA_DIR_PeripheralDST | 
+        DMA_IT_TC | \
+        DMA_CFGR1_EN | \
+        flags
+    ;
 }

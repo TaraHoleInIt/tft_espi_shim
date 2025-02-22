@@ -5,6 +5,14 @@
 #ifndef _TFT_ESPI_SHIM_H_
 #define _TFT_ESPI_SHIM_H_
 
+#if defined __has_include
+    #if __has_include( "tft_setup.h" )
+        #include <tft_setup.h>
+    #else
+        #error lol
+    #endif
+#endif
+
 #ifndef WEAK
 #define WEAK __attribute__( ( weak ) )
 #endif

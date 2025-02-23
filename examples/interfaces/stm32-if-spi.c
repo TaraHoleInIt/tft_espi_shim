@@ -1,8 +1,11 @@
+#include <stdio.h>
+#include <stdlib.h>
 #include "stm32u0xx_hal.h"
 #include "tft_espi_shim.h"
 
-GPIO_TypeDef* getPortFromIOPin( uint8_t ioPortPin );
-int getPinFromIOPin( uint8_t ioPortPin );
+static GPIO_TypeDef* getPortFromIOPin( uint8_t ioPortPin );
+static int getPinFromIOPin( uint8_t ioPortPin );
+static int spiSetFreq( int newFreq );
 
 GPIO_TypeDef* getPortFromIOPin( uint8_t ioPortPin ) {
     ioPortPin = ( ioPortPin >> 4 ) & 0x0F;
@@ -20,11 +23,11 @@ GPIO_TypeDef* getPortFromIOPin( uint8_t ioPortPin ) {
     return GPIOA;
 }
 
-int getPinFromIOPin( uint8_t ioPortPin ) {
+static int getPinFromIOPin( uint8_t ioPortPin ) {
     return ( ioPortPin & 0x0F );
 }
 
-void gpioSetMode( GPIO_TypeDef* PORT, int pinNo, int mode, int af, int speed, int pupd, int initialLevel ) {
+static void gpioSetMode( GPIO_TypeDef* PORT, int pinNo, int mode, int af, int speed, int pupd, int initialLevel ) {
     int r = 0;
 
 	mode &= 0x03;
@@ -108,11 +111,12 @@ void _tftBusInit( uint32_t freq ) {
     TFT_SPI_PORT->CR1 = \
         SPI_CR1_SSM | \
         SPI_CR1_MSTR | \
-        0 | \
         SPI_CR1_SSI
     ;
     TFT_SPI_PORT->CR2 = SPI_CR2_DS_0 | SPI_CR2_DS_1 | SPI_CR2_DS_2 | SPI_CR2_FRXTH;
     TFT_SPI_PORT->CR1 |= SPI_CR1_SPE;
+
+    spiSetFreq( freq );
 }
 
 void _tftPinSetOutput( int pin ) {
@@ -153,15 +157,25 @@ void _tftPinWrite( int pin, int level ) {
     p->BSRR |= ( level << pin ) | ( ( ! level ) << ( pin + 16 ) );
 }
 
-
-uint8_t _tftBusWrite8( uint8_t data ) {
+void spiWaitTX( void ) {
     while ( ! ( TFT_SPI_PORT->SR & SPI_SR_TXE ) )
     ;
+}
 
-    *( ( __IO uint8_t* ) &TFT_SPI_PORT->DR ) = data;
-
+void spiWaitRX( void ) {
     while ( ! ( TFT_SPI_PORT->SR & SPI_SR_RXNE ) )
     ;
+}
+
+void spiWaitBusy( void ) {
+    while ( TFT_SPI_PORT->SR & SPI_SR_BSY )
+    ;
+}
+
+uint8_t _tftBusWrite8( uint8_t data ) {
+    spiWaitTX( );
+        *( ( __IO uint8_t* ) &TFT_SPI_PORT->DR ) = data;
+    spiWaitRX( );
 
     return *( ( __IO uint8_t* ) &TFT_SPI_PORT->DR );
 }
@@ -177,4 +191,62 @@ uint16_t _tftBusWrite16( uint16_t data ) {
 
 void _tftDelayMSec( uint32_t msec ) {
     HAL_Delay( msec );
+}
+
+int spiSetFreq( int newFreq ) {
+    static const uint8_t prescalers[ 8 ] = {
+        0 << SPI_CR1_BR_Pos,    // CLK / 2
+        1 << SPI_CR1_BR_Pos,    // CLK / 4
+        2 << SPI_CR1_BR_Pos,    // CLK / 8
+        3 << SPI_CR1_BR_Pos,    // CLK / 16
+        4 << SPI_CR1_BR_Pos,    // CLK / 32
+        5 << SPI_CR1_BR_Pos,    // CLK / 64
+        6 << SPI_CR1_BR_Pos,    // CLK / 128
+        7 << SPI_CR1_BR_Pos,    // CLK / 256
+    };
+    uint32_t periphClk = 0;
+    int freqActual = 0;
+    int freqClosest = 0;
+    int freqDiff = 0;
+    int smallestDiff = 0;
+    int pscShift = 0;
+    int pscIdx = 0;
+    int i = 0;
+    int wasEnabled = 0;
+
+    spiWaitBusy( );
+
+    wasEnabled = ( TFT_SPI_PORT->CR1 & SPI_CR1_SPE );
+    periphClk = HAL_RCC_GetPCLK1Freq( );
+    freqClosest = periphClk >> 1;
+    freqDiff = freqClosest;
+    smallestDiff = freqDiff;
+
+    for ( i = 0; i < 8; i++ ) {
+        pscShift = i + 1;
+
+        freqActual = periphClk >> pscShift;
+        freqDiff = abs( freqActual - newFreq );
+
+        if ( freqDiff < smallestDiff ) {
+            smallestDiff = freqDiff;
+            freqClosest = freqActual;
+            pscIdx = i;
+        }
+    }
+
+    // Clamp the prescaler index to be extra sure...
+    pscIdx &= 0x07;
+
+    TFT_SPI_PORT->CR1 &= ~SPI_CR1_SPE;
+        TFT_SPI_PORT->CR1 &= ~SPI_CR1_BR_Msk;
+        TFT_SPI_PORT->CR1 |= prescalers[ pscIdx ];
+    TFT_SPI_PORT->CR1 |= wasEnabled;
+
+    // SPI1->CTLR1 &= ~SPI_CTLR1_SPE;      // Disable SPI
+    //     SPI1->CTLR1 &= ~SPI_CTLR1_BR;   // Clear baud rate bits
+    //     SPI1->CTLR1 |= prescalers[ pscIdx ];
+    // SPI1->CTLR1 |= wasEnabled;          // Re-enable SPI (if enabled before)
+
+    return freqClosest;
 }

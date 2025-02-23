@@ -116,7 +116,7 @@ static void fillScreen( uint16_t color ) {
 }
 
 void tftShimInit( void ) {
-    _tftBusInit( 1000000 );
+    _tftBusInit( TFT_BUS_SPEED );
 
     if ( TFT_CS > -1 ) {
         _tftPinWrite( TFT_CS, 1 );        

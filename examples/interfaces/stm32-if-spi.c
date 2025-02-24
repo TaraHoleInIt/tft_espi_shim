@@ -3,9 +3,14 @@
 #include "stm32u0xx_hal.h"
 #include "tft_espi_shim.h"
 
+#define SPI_TX_DMA DMA1_Channel1
+
+static void setupSPIDMA16( const void* src, uint16_t count, uint32_t flags );
 static GPIO_TypeDef* getPortFromIOPin( uint8_t ioPortPin );
 static int getPinFromIOPin( uint8_t ioPortPin );
 static int spiSetFreq( int newFreq );
+
+volatile int isInTXDMA = 0;
 
 GPIO_TypeDef* getPortFromIOPin( uint8_t ioPortPin ) {
     ioPortPin = ( ioPortPin >> 4 ) & 0x0F;
@@ -20,6 +25,8 @@ GPIO_TypeDef* getPortFromIOPin( uint8_t ioPortPin ) {
         default: break;
     };
 
+    // TODO
+    // Fix this
     return GPIOA;
 }
 
@@ -57,6 +64,7 @@ static void gpioSetMode( GPIO_TypeDef* PORT, int pinNo, int mode, int af, int sp
 }
 
 void _tftBusInit( uint32_t freq ) {
+    RCC->AHBENR |= RCC_AHBENR_DMA1EN;
     RCC->APBENR2 |= RCC_APBENR2_SPI1EN;
     asm volatile( "nop" );
 
@@ -113,10 +121,10 @@ void _tftBusInit( uint32_t freq ) {
         SPI_CR1_MSTR | \
         SPI_CR1_SSI
     ;
-    TFT_SPI_PORT->CR2 = SPI_CR2_DS_0 | SPI_CR2_DS_1 | SPI_CR2_DS_2 | SPI_CR2_FRXTH;
+    TFT_SPI_PORT->CR2 = SPI_CR2_DS_0 | SPI_CR2_DS_1 | SPI_CR2_DS_2 | SPI_CR2_FRXTH | SPI_CR2_TXDMAEN;
     TFT_SPI_PORT->CR1 |= SPI_CR1_SPE;
 
-    spiSetFreq( freq );
+    printf( "SPI Frequency: %uMHz\n", ( spiSetFreq( freq ) ) / 1000000 );
 }
 
 void _tftPinSetOutput( int pin ) {
@@ -243,10 +251,58 @@ int spiSetFreq( int newFreq ) {
         TFT_SPI_PORT->CR1 |= prescalers[ pscIdx ];
     TFT_SPI_PORT->CR1 |= wasEnabled;
 
-    // SPI1->CTLR1 &= ~SPI_CTLR1_SPE;      // Disable SPI
-    //     SPI1->CTLR1 &= ~SPI_CTLR1_BR;   // Clear baud rate bits
-    //     SPI1->CTLR1 |= prescalers[ pscIdx ];
-    // SPI1->CTLR1 |= wasEnabled;          // Re-enable SPI (if enabled before)
-
     return freqClosest;
+}
+
+static void setupSPIDMA16( const void* src, uint16_t count, uint32_t flags ) {
+    while ( SPI_TX_DMA->CNDTR > 0 )
+    ;
+
+    SPI_TX_DMA->CMAR = ( uint32_t ) src;
+    SPI_TX_DMA->CPAR = ( uint32_t ) &TFT_SPI_PORT->DR;
+    SPI_TX_DMA->CNDTR = count;
+    SPI_TX_DMA->CCR = \
+        DMA_CCR_PL_0 | DMA_CCR_PL_1 |   // Very high priority
+        DMA_CCR_MSIZE_0 |               // 16 Bit memory
+        DMA_CCR_PSIZE_0 |               // 16 Bit peripheral
+        DMA_CCR_DIR |                   // Read from memory
+        0
+    ;
+
+    DMAMUX1_Channel0->CCR = ( 37 << DMAMUX_CxCR_DMAREQ_ID_Pos );
+    SPI_TX_DMA->CCR |= DMA_CCR_EN;
+}
+
+void tftPushColor( uint16_t color, int count ) {
+    __attribute__( ( aligned( 2 ) ) ) static volatile uint16_t c2 = 0;
+
+    while ( SPI_TX_DMA->CNDTR )
+    ;
+
+    spiWaitBusy( );
+    spiWaitTX( );
+
+    TFT_SPI_PORT->CR1 &= ~SPI_CR1_SPE;
+        TFT_SPI_PORT->CR2 &= ~SPI_CR2_DS_Msk;
+        TFT_SPI_PORT->CR2 |= ( 0x0F << SPI_CR2_DS_Pos );
+    TFT_SPI_PORT->CR1 |= SPI_CR1_SPE;
+
+    setupSPIDMA16( 
+        ( uint16_t* ) &color, 
+        count,
+        0
+    );
+
+    // TODO
+    // Prooobably shouldn't block...
+    // Figure out what to do
+    while ( SPI_TX_DMA->CNDTR )
+    ;
+
+    SPI_TX_DMA->CCR &= ~DMA_CCR_EN;
+
+    TFT_SPI_PORT->CR1 &= ~SPI_CR1_SPE;
+        TFT_SPI_PORT->CR2 &= ~SPI_CR2_DS_Msk;
+        TFT_SPI_PORT->CR2 |= SPI_CR2_DS_0 | SPI_CR2_DS_1 | SPI_CR2_DS_2;
+    TFT_SPI_PORT->CR1 |= SPI_CR1_SPE;
 }

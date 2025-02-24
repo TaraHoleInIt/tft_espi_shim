@@ -180,7 +180,7 @@ tabcolor = TAB_COLOUR;
     end_tft_write( );
 
     tftRotate( 0 );
-    tftFillScreen( TFT_BLACK );
+    //tftFillScreen( TFT_BLACK );
 }
 
 void tftRotate( uint8_t m ) {
@@ -262,7 +262,7 @@ void tftSetAddressWindow( uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1 ) {
     // TARA:
     // Should we just leave it enabled like this?
 
-    //end_tft_write( );
+    end_tft_write( );
 }
 
 void tftBeginPixels( void ) {

@@ -81,7 +81,7 @@ void _tftBusInit( uint32_t freq ) {
             GPIO_MODE_OUTPUT_PP,
             TFT_CS,
             GPIO_SPEED_FREQ_VERY_HIGH,
-            GPIO_NOPULL,
+            GPIO_PULLUP,
             1
         );
     }
@@ -259,13 +259,13 @@ static void setupSPIDMA16( const void* src, uint16_t count, uint32_t flags ) {
     ;
 
     SPI_TX_DMA->CMAR = ( uint32_t ) src;
-    SPI_TX_DMA->CPAR = ( uint32_t ) &TFT_SPI_PORT->DR;
+    SPI_TX_DMA->CPAR = ( uint32_t ) ( ( __IO uint16_t* ) &TFT_SPI_PORT->DR );
     SPI_TX_DMA->CNDTR = count;
     SPI_TX_DMA->CCR = \
         DMA_CCR_PL_0 | DMA_CCR_PL_1 |   // Very high priority
         DMA_CCR_MSIZE_0 |               // 16 Bit memory
         DMA_CCR_PSIZE_0 |               // 16 Bit peripheral
-        DMA_CCR_DIR |                   // Read from memory
+        DMA_CCR_DIR               |
         0
     ;
 
@@ -274,18 +274,20 @@ static void setupSPIDMA16( const void* src, uint16_t count, uint32_t flags ) {
 }
 
 void tftPushColor( uint16_t color, int count ) {
-    __attribute__( ( aligned( 2 ) ) ) static volatile uint16_t c2 = 0;
-
     while ( SPI_TX_DMA->CNDTR )
     ;
 
     spiWaitBusy( );
     spiWaitTX( );
 
-    TFT_SPI_PORT->CR1 &= ~SPI_CR1_SPE;
-        TFT_SPI_PORT->CR2 &= ~SPI_CR2_DS_Msk;
-        TFT_SPI_PORT->CR2 |= ( 0x0F << SPI_CR2_DS_Pos );
-    TFT_SPI_PORT->CR1 |= SPI_CR1_SPE;
+    // TARA:
+    // CS MUST BE HIGH WHEN CHANGING SPI MODE
+    _tftPinWrite( TFT_CS, 1 );
+        TFT_SPI_PORT->CR1 &= ~SPI_CR1_SPE;
+            TFT_SPI_PORT->CR2 &= ~SPI_CR2_DS_Msk;
+            TFT_SPI_PORT->CR2 |= ( 0x0F << SPI_CR2_DS_Pos );
+        TFT_SPI_PORT->CR1 |= SPI_CR1_SPE;
+    _tftPinWrite( TFT_CS, 0 );
 
     setupSPIDMA16( 
         ( uint16_t* ) &color, 
@@ -299,6 +301,10 @@ void tftPushColor( uint16_t color, int count ) {
     while ( SPI_TX_DMA->CNDTR )
     ;
 
+    // Make sure CS is HIGH before changing SPI mode again
+    _tftPinWrite( TFT_CS, 1 );
+
+    // Turn off DMA
     SPI_TX_DMA->CCR &= ~DMA_CCR_EN;
 
     TFT_SPI_PORT->CR1 &= ~SPI_CR1_SPE;

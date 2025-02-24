@@ -180,7 +180,7 @@ tabcolor = TAB_COLOUR;
     end_tft_write( );
 
     tftRotate( 0 );
-    //tftFillScreen( TFT_BLACK );
+    tftFillScreen( TFT_BLACK );
 }
 
 void tftRotate( uint8_t m ) {

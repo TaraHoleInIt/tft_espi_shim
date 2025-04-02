@@ -12,8 +12,15 @@ int main( void ) {
     fflush( stdout );
 
     tftShimInit( );
-    tftFillScreen( TFT_GREEN );
 
     while( 1 ) {
+        tftFillScreen( TFT_RED );
+        Delay_Ms( 1000 );
+
+        tftFillScreen( TFT_GREEN );
+        Delay_Ms( 1000 );
+
+        tftFillScreen( TFT_BLUE );
+        Delay_Ms( 1000 );
     }
 }

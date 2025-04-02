@@ -15,6 +15,12 @@
 #define SPI_GPIO_PORT GPIOB
 #define SPI_PORT SPI2
 
+#define SPI_TX_DMA DMA1_Channel5
+#define SPI_RX_DMA DMA1_Channel4
+
+#define SPI_TXTC DMA1_FLAG_TC5
+#define SPI_RXTC DMA1_FLAG_TC4
+
 #define SPI_MOSI 15
 #define SPI_MISO 14
 #define SPI_SCLK 13

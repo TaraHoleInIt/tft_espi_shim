@@ -16,6 +16,8 @@ static void _spiWaitRXNE( void );
 static void _spiSet8Bit( void );
 static void _spiSet16Bit( void );
 
+static void _waitDMA( DMA_Channel_TypeDef* dma, uint32_t tcFlag );
+
 static void _gpioSetModeHi( GPIO_TypeDef* port, int pinNo, int mode_speed, int initialLevel ) {
     pinNo-= 8;
 
@@ -73,6 +75,7 @@ uint32_t _spiFreqFromPSC( uint32_t psc ) {
 
 void _tftPinSetup( void ) {
     RCC->APB2PCENR |= RCC_APB2Periph_AFIO;
+    RCC->AHBPCENR |= RCC_AHBPeriph_DMA1;
     SPI_POWER_PORT |= SPI_POWER_BIT;
 
     gpioSetMode( CS_PORT, CS_PIN, GPIO_Mode_Out_PP | GPIO_Speed_50MHz, 1 );
@@ -86,6 +89,7 @@ void _tftPinSetup( void ) {
     SPI_PORT->CTLR1 = 0;
     SPI_PORT->CTLR2 = 0;
 
+    SPI_PORT->CTLR2 = SPI_CTLR2_RXDMAEN | SPI_CTLR2_TXDMAEN;
     SPI_PORT->CTLR1 = \
         SPI_Mode_Master | \
         SPI_Direction_2Lines_FullDuplex | \
@@ -182,4 +186,77 @@ static void _spiSet16Bit( void ) {
     SPI_PORT->CTLR1 &= ~SPI_CTLR1_SPE;
         SPI_PORT->CTLR1 |= SPI_CTLR1_DFF;
     SPI_PORT->CTLR1 |= SPI_CTLR1_SPE;
+}
+
+static void _waitDMA( DMA_Channel_TypeDef* dma, uint32_t tcFlag ) {
+    if ( dma->CFGR & DMA_CFGR1_EN ) {
+        while ( ! DMA_GetFlagStatus( tcFlag ) )
+        ;
+
+        DMA1->INTFCR |= tcFlag;
+    }
+}
+
+void tftPushColor( uint16_t color, int count ) {
+    static uint16_t dummy = 0xFFFF;
+    int len = 0;
+
+    _waitDMA( SPI_TX_DMA, SPI_TXTC );
+    _waitDMA( SPI_RX_DMA, SPI_RXTC );
+
+    _spiWaitTXE( );
+    _spiWaitBusy( );
+
+    tftEndPixels( );
+    _spiSet16Bit( );
+        tftBeginPixels( );
+            while ( count ) {
+                len = ( count > 65535 ) ? 65535 : count;
+
+                SPI_TX_DMA->CFGR = 0;
+                SPI_TX_DMA->CNTR = len;
+                SPI_TX_DMA->MADDR = ( uint32_t ) &color;
+                SPI_TX_DMA->PADDR = ( uint32_t ) &SPI_PORT->DATAR;
+
+                SPI_RX_DMA->CFGR = 0;
+                SPI_RX_DMA->CNTR = len;
+                SPI_RX_DMA->MADDR = ( uint32_t ) &dummy;
+                SPI_RX_DMA->PADDR = ( uint32_t ) &SPI_PORT->DATAR;
+
+                SPI_RX_DMA->CFGR = 
+                    DMA_Priority_VeryHigh | \
+                    DMA_MemoryDataSize_HalfWord | \
+                    DMA_PeripheralDataSize_HalfWord | \
+                    DMA_Mode_Normal | \
+                    DMA_DIR_PeripheralSRC | \
+                    DMA_M2M_Disable | \
+                    DMA_PeripheralInc_Disable | \
+                    DMA_MemoryInc_Disable | \
+                    DMA_IT_TC | \
+                    DMA_CFGR1_EN
+                ;
+
+                SPI_TX_DMA->CFGR = 
+                    DMA_Priority_VeryHigh | \
+                    DMA_MemoryDataSize_HalfWord | \
+                    DMA_PeripheralDataSize_HalfWord | \
+                    DMA_Mode_Normal | \
+                    DMA_DIR_PeripheralDST | \
+                    DMA_M2M_Disable | \
+                    DMA_PeripheralInc_Disable | \
+                    DMA_MemoryInc_Disable | \
+                    DMA_IT_TC | \
+                    DMA_CFGR1_EN
+                ;
+
+                _waitDMA( SPI_RX_DMA, SPI_RXTC );
+                _waitDMA( SPI_TX_DMA, SPI_TXTC );
+
+                SPI_TX_DMA->CFGR = 0;
+                SPI_RX_DMA->CFGR = 0;
+
+                count-= len;
+            }
+        tftEndPixels( );
+    _spiSet8Bit( );
 }

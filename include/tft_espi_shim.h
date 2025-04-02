@@ -8,8 +8,6 @@
 #if defined __has_include
     #if __has_include( "tft_setup.h" )
         #include <tft_setup.h>
-    #else
-        #error lol
     #endif
 #endif
 
@@ -54,14 +52,20 @@
   #define TAB_COLOUR 0
 #endif
 
-WEAK void _tftBusInit( uint32_t freq );
-WEAK void _tftPinSetOutput( int pin );
-WEAK void _tftPinSetInput( int pin );
-WEAK int _tftPinRead( int pin );
-WEAK void _tftPinWrite( int pin, int level );
 WEAK uint8_t _tftBusWrite8( uint8_t data );
 WEAK uint16_t _tftBusWrite16( uint16_t data );
 WEAK void _tftDelayMSec( uint32_t msec );
+
+WEAK void _tftDCHigh( void );
+WEAK void _tftDCLow( void );
+
+WEAK void _tftCSHigh( void );
+WEAK void _tftCSLow( void );
+
+WEAK void _tftRSTHigh( void );
+WEAK void _tftRSTLow( void );
+
+WEAK void _tftPinSetup( void );
 
 void tftShimInit( void );
 void tftRotate( uint8_t m );

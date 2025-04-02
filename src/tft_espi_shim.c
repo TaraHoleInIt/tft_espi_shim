@@ -9,8 +9,8 @@
 #include <stdlib.h>
 #include "tft_espi_shim.h"
 
-#define DC_C _tftPinWrite( TFT_DC, 0 )
-#define DC_D _tftPinWrite( TFT_DC, 1 )
+#define _tftDCLow( ) _tftDCLow( )
+#define _tftDCHigh( ) _tftDCHigh( )
 
 #if defined GC9A01_DRIVER
 #include "../TFT_eSPI/TFT_Drivers/GC9A01_Defines.h"
@@ -84,26 +84,27 @@ static void delay( int ms ) {
 }
 
 static void begin_tft_write( void ) {
-    _tftPinWrite( TFT_CS, 0 );
+    _tftCSLow( );
 }
 
 static void end_tft_write( void ) {
-    _tftPinWrite( TFT_CS, 1 );
+    _tftCSHigh( );
 }
 
 static void writecommand( uint8_t cmd ) {
     begin_tft_write( );
-        DC_C;
+        _tftDCLow( );
             _tftBusWrite8( cmd );
-        DC_D;
+        _tftDCHigh( );
     end_tft_write( );
 }
 
 static void writedata( uint8_t data ) {
     begin_tft_write( );
-        DC_D;
+        _tftDCHigh( );
         _tftBusWrite8( data );
-        _tftPinWrite( TFT_CS, 0 );
+
+        _tftCSLow( );
     end_tft_write( );
 }
 
@@ -116,38 +117,22 @@ static void fillScreen( uint16_t color ) {
 }
 
 void tftShimInit( void ) {
-    _tftBusInit( TFT_BUS_SPEED );
+    _tftPinSetup( );
 
-    if ( TFT_CS > -1 ) {
-        _tftPinWrite( TFT_CS, 1 );        
-        _tftPinSetOutput( TFT_CS );
-    }
+    _tftCSHigh( );
+    _tftDCHigh( );
 
-    if ( TFT_DC > -1 ) {
-        _tftPinWrite( TFT_DC, 0 );        
-        _tftPinSetOutput( TFT_DC );
-    }
+    writecommand( 0x00 );
 
-#if defined TFT_RST
-    if ( TFT_RST > -1 ) {
-        writecommand( 0x00 );
+    _tftRSTHigh( );
+    _tftDelayMSec( 5 );
 
-        _tftPinWrite( TFT_RST, 1 );
-        _tftPinSetOutput( TFT_RST );
+    _tftRSTLow( );
+    _tftDelayMSec( 20 );
 
-        _tftDelayMSec( 5 );
+    _tftRSTHigh( );
 
-        _tftPinWrite( TFT_RST, 0 );
-        _tftDelayMSec( 20 );
-
-        _tftPinWrite( TFT_RST, 1 );
-    } else {
-#else
-    {
-#endif
-        writecommand( TFT_SWRST );
-    }
-
+    writecommand( TFT_SWRST );
     _tftDelayMSec( 150 );
 
     begin_tft_write( );
@@ -220,44 +205,44 @@ void tftSetAddressWindow( uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1 ) {
     begin_tft_write( );
 #if defined SSD1351_DRIVER
         // Col address
-        DC_C;
+        _tftDCLow( );
         _tftBusWrite8( TFT_CASET );
 
-        DC_D;
+        _tftDCHigh( );
         _tftBusWrite8( x0 );
         _tftBusWrite8( x1 );
 
         // Row address
-        DC_C;
+        _tftDCLow( );
         ( *hw.busWrite8 )( TFT_PASET );
 
-        DC_D;
+        _tftDCHigh( );
         _tftBusWrite8( y0 );
         _tftBusWrite8( y1 );
 
-        DC_C;
+        _tftDCLow( );
         _tftBusWrite8( TFT_RAMWR );
-        DC_D;
+        _tftDCHigh( );
 #else
         // Col address
-        DC_C;
+        _tftDCLow( );
         _tftBusWrite8( TFT_CASET );
 
-        DC_D;
+        _tftDCHigh( );
         _tftBusWrite16( x0 + colstart );
         _tftBusWrite16( x1 + colstart );
 
         // Row address
-        DC_C;
+        _tftDCLow( );
         _tftBusWrite8( TFT_PASET );
 
-        DC_D;
+        _tftDCHigh( );
         _tftBusWrite16( y0 + rowstart );
         _tftBusWrite16( y1 + rowstart );
 
-        DC_C;
+        _tftDCLow( );
         _tftBusWrite8( TFT_RAMWR );
-        DC_D;
+        _tftDCHigh( );
 #endif
     // TARA:
     // Should we just leave it enabled like this?
@@ -267,7 +252,7 @@ void tftSetAddressWindow( uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1 ) {
 
 void tftBeginPixels( void ) {
     begin_tft_write( );
-    DC_D;
+    _tftDCHigh( );
 }
 
 void tftEndPixels( void ) {

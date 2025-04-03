@@ -260,3 +260,68 @@ void tftPushColor( uint16_t color, int count ) {
         tftEndPixels( );
     _spiSet8Bit( );
 }
+
+void tftPushPixels( const uint16_t* buf, int lenWords ) {
+    static uint16_t dummy = 0xFFFF;
+    int len = 0;
+
+    _waitDMA( SPI_TX_DMA, SPI_TXTC );
+    _waitDMA( SPI_RX_DMA, SPI_RXTC );
+
+    _spiWaitTXE( );
+    _spiWaitBusy( );
+
+    tftEndPixels( );
+    _spiSet16Bit( );
+        tftBeginPixels( );
+            while ( lenWords ) {
+                len = ( lenWords > 65535 ) ? 65535 : lenWords;
+
+                SPI_TX_DMA->CFGR = 0;
+                SPI_TX_DMA->CNTR = len;
+                SPI_TX_DMA->MADDR = ( uint32_t ) buf;
+                SPI_TX_DMA->PADDR = ( uint32_t ) &SPI_PORT->DATAR;
+
+                SPI_RX_DMA->CFGR = 0;
+                SPI_RX_DMA->CNTR = len;
+                SPI_RX_DMA->MADDR = ( uint32_t ) &dummy;
+                SPI_RX_DMA->PADDR = ( uint32_t ) &SPI_PORT->DATAR;   
+                
+                SPI_RX_DMA->CFGR = 
+                    DMA_Priority_VeryHigh | \
+                    DMA_MemoryDataSize_HalfWord | \
+                    DMA_PeripheralDataSize_HalfWord | \
+                    DMA_Mode_Normal | \
+                    DMA_DIR_PeripheralSRC | \
+                    DMA_M2M_Disable | \
+                    DMA_PeripheralInc_Disable | \
+                    DMA_MemoryInc_Disable | \
+                    DMA_IT_TC | \
+                    DMA_CFGR1_EN
+                ;
+
+                SPI_TX_DMA->CFGR = 
+                    DMA_Priority_VeryHigh | \
+                    DMA_MemoryDataSize_HalfWord | \
+                    DMA_PeripheralDataSize_HalfWord | \
+                    DMA_Mode_Normal | \
+                    DMA_DIR_PeripheralDST | \
+                    DMA_M2M_Disable | \
+                    DMA_PeripheralInc_Disable | \
+                    DMA_MemoryInc_Enable | \
+                    DMA_IT_TC | \
+                    DMA_CFGR1_EN
+                ;
+
+                _waitDMA( SPI_RX_DMA, SPI_RXTC );
+                _waitDMA( SPI_TX_DMA, SPI_TXTC );
+
+                SPI_TX_DMA->CFGR = 0;
+                SPI_RX_DMA->CFGR = 0;
+
+                lenWords-= len;
+                buf+= len;
+            }
+        tftEndPixels( );
+    _spiSet8Bit( );
+}

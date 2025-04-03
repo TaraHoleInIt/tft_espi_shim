@@ -1,6 +1,10 @@
 #include "debug.h"
 #include "tft_espi_shim.h"
 
+extern const unsigned char catImage[ 240 * 108 * 2 ];
+
+void drawCat( void );
+
 int main( void ) {
     NVIC_PriorityGroupConfig( NVIC_PriorityGroup_1 );
     SystemCoreClockUpdate( );
@@ -15,12 +19,23 @@ int main( void ) {
 
     while( 1 ) {
         tftFillScreen( TFT_RED );
+        drawCat( );
         Delay_Ms( 1000 );
 
         tftFillScreen( TFT_GREEN );
+        drawCat( );
         Delay_Ms( 1000 );
 
         tftFillScreen( TFT_BLUE );
+        drawCat( );
         Delay_Ms( 1000 );
     }
+}
+
+void drawCat( void ) {
+    tftSetAddressWindow( 0, 63, 239, 171 );
+
+    tftBeginPixels( );
+        tftPushPixels( ( const uint16_t* ) catImage, sizeof( catImage ) / 2 );
+    tftEndPixels( );
 }

@@ -111,7 +111,7 @@ static void writedata( uint8_t data ) {
 static void fillScreen( uint16_t color ) {
     tftSetAddressWindow( 0, 0, TFT_WIDTH - 1, TFT_HEIGHT - 1 );
 
-    for ( int i = 0; i < TFT_WIDTH * TFT_HEIGHT; i++ ) {
+    for ( int32_t i = 0; i < TFT_WIDTH * TFT_HEIGHT; i++ ) {
         _tftBusWrite16( color );
     }
 }
@@ -267,12 +267,12 @@ void tftFillScreen( uint16_t color ) {
     tftEndPixels( );
 }
 
-WEAK void tftPushColor( uint16_t color, int count ) {
+WEAK void tftPushColor( uint16_t color, int32_t count ) {
     while ( count-- )
         _tftBusWrite16( color );
 }
 
-WEAK void tftPushPixels( const uint16_t* buf, int lenWords ) {
+WEAK void tftPushPixels( const uint16_t* buf, int32_t lenWords ) {
     while ( lenWords-- )
         _tftBusWrite16( *buf++ );
 }

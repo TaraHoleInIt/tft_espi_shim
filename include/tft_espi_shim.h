@@ -74,7 +74,7 @@ void tftBeginPixels( void );
 void tftEndPixels( void );
 void tftFillScreen( uint16_t color );
 
-WEAK void tftPushColor( uint16_t color, int count );
-WEAK void tftPushPixels( const uint16_t* buf, int lenWords );
+WEAK void tftPushColor( uint16_t color, int32_t count );
+WEAK void tftPushPixels( const uint16_t* buf, int32_t lenWords );
 
 #endif

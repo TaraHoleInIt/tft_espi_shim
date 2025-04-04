@@ -1,7 +1,12 @@
 #include <avr/io.h>
+#include <avr/pgmspace.h>
 #include <util/delay.h>
 #include "tft_espi_shim.h"
 
+#define pulseUSI( ) do { USICR = usiClockLO; USICR = usiClockHI; } while ( 0 )
+
+static const uint8_t usiClockHI = _BV( USIWM0 ) | ( 0 << USICS0 ) | _BV( USITC ) | _BV( USICLK );
+static const uint8_t usiClockLO = _BV( USIWM0 ) | ( 0 << USICS0 ) | _BV( USITC );
 
 uint8_t _tftBusWrite8( uint8_t data ) {
     uint8_t hi = _BV( USIWM0 ) | ( 0 << USICS0 ) | _BV( USITC ) | _BV( USICLK );
@@ -95,12 +100,7 @@ uint16_t _tftBusWrite16( uint16_t data ) {
     USICR = lo; // LSB
     USICR = hi;
 
-    res |= USIDR;
-
-    // res = _tftBusWrite8( ( data >> 8 ) & 0xFF );
-    // res |= _tftBusWrite8( data & 0xFF ) << 8;
-
-    return res;
+    return res | USIDR;
 }
 
 void _tftDelayMSec( uint32_t msec ) {
@@ -143,4 +143,39 @@ void _tftPinSetup( void ) {
     RST_DIR |= _BV( RST_PIN );
 
     SPI_DIR |= _BV( SPI_MOSI ) | _BV( SPI_SCLK );
+}
+
+void tftPushPixels( const uint16_t* buf, int32_t lenWords ) {
+    uint16_t data = 0;
+
+    tftBeginPixels( );
+        while ( lenWords-- ) {
+            data = pgm_read_word( buf++ );
+
+            USIDR = ( data >> 8 ) & 0xFF;
+
+            pulseUSI( );    // MSB
+            pulseUSI( );
+            pulseUSI( );
+            pulseUSI( );
+            pulseUSI( );
+            pulseUSI( );
+            pulseUSI( );
+            pulseUSI( );    // LSB
+
+            ( void ) USIDR;
+            USIDR = data & 0xFF;
+
+            pulseUSI( );    // MSB
+            pulseUSI( );
+            pulseUSI( );
+            pulseUSI( );
+            pulseUSI( );
+            pulseUSI( );
+            pulseUSI( );
+            pulseUSI( );    // LSB
+
+            ( void ) USIDR;
+        }
+    tftEndPixels( );
 }
